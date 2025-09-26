@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Phòng thi</title>
+<style>
+body {font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin:0; padding:0; background:#f0f2f5;}
+.container {display:flex; height:100vh; box-shadow:0 0 10px rgba(0,0,0,0.1);}
+.left-panel {flex:3; padding:30px; background:white; display:flex; flex-direction:column; box-sizing:border-box;}
+.right-panel {flex:1; background:#2f3e46; padding:20px; color:white; overflow-y:auto; box-sizing:border-box;}
+#timer {font-size:28px; font-weight:bold; color:#d00000; text-align:right; margin-bottom:20px;}
+#question-text {font-size:22px; margin-bottom:20px; min-height:60px;}
+.option-btn {padding:15px; margin:8px 0; font-size:18px; cursor:pointer; border:1px solid #ccc; border-radius:8px; text-align:left; transition:0.2s; width:100%; background:#f8f9fa;}
+.option-btn:hover {background:#e0f7fa;}
+.selected {background:#ffe082;}
+.correct {background:#2ecc71;}
+.wrong {background:#e74c3c;}
+.sidebar-btn {width:40px; height:40px; margin:5px; font-weight:bold; cursor:pointer; border:none; border-radius:5px; transition:0.2s; background:#6c757d; color:white;}
+.sidebar-btn:hover {opacity:0.8;}
+.answered {background:#1abc9c;}
+.button-group {margin-top:auto; display:flex; gap:10px;}
+.button-group button {flex:1; padding:12px 0; font-size:16px; border:none; border-radius:5px; cursor:pointer; transition:0.2s;}
+.button-group button:hover {opacity:0.85;}
+.btn-prev {background:#3498db; color:white;}
+.btn-next {background:#9b59b6; color:white;}
+.btn-submit {background:#e74c3c; color:white;}
+.btn-exit {background:#555; color:white;}
+.correct-answer {font-weight:bold; color:#2ecc71;}
+.wrong-answer {font-weight:bold; color:#e74c3c;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="left-panel">
+    <div id="timer">60:00</div>
+    <div id="question-text">Đang tải câu hỏi...</div>
+    <div id="options"></div>
+    <div class="button-group">
+      <button class="btn-prev" onclick="prevQ()">Câu trước</button>
+      <button class="btn-next" onclick="nextQ()">Câu sau</button>
+      <button class="btn-submit" onclick="submitExam()">Nộp bài</button>
+      <button class="btn-exit" onclick="exitExam()">Thoát</button>
+    </div>
+  </div>
+  <div class="right-panel" id="sidebar">
+    <h3>Danh sách câu hỏi</h3>
+  </div>
+</div>
+
+<script>
+let examData=null;
+let timerSec=60*60;
+let timerInterval=null;
+let submitted=false;
+
+// Load câu hỏi hiện tại
+async function loadQuestion(){
+    const res=await fetch("/exam/question");
+    const q=await res.json();
+    if(q.error){
+        document.getElementById("question-text").innerText="Không có dữ liệu bài thi!";
+        return;
+    }
+    examData=q;
+    document.getElementById("question-text").innerHTML=`Câu ${q.index+1}: ${q.question}`;
+    const optionsDiv=document.getElementById("options");
+    optionsDiv.innerHTML="";
+    q.options.forEach((opt,i)=>{
+    const btn=document.createElement("button");
+    btn.innerText=opt;
+    btn.className="option-btn";
+
+    if(submitted){
+        const correct=q.correct_index;
+        const selected=q.selected;
+
+        if(i===selected && i===correct) btn.style.background="#3498db"; // học sinh đúng → xanh dương
+        else if(i===correct) btn.style.background="#2ecc71";             // đáp án đúng → xanh lá
+        else if(i===selected && i!==correct) btn.style.background="#e74c3c"; // học sinh sai → đỏ
+    } else if(q.selected===i){
+        btn.classList.add("selected"); // trước khi nộp
+    }
+
+    btn.onclick=()=>answer(i);
+    optionsDiv.appendChild(btn);
+});
+    updateSidebar();
+}
+
+// Chọn đáp án (có thể chọn lại)
+async function answer(idx){
+    if(submitted) return;
+    await fetch("/exam/answer",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({selected:idx})
+    });
+    await loadQuestion();
+}
+
+// Chuyển câu hỏi
+async function gotoQ(idx){
+    await fetch("/exam/goto",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:idx})
+    });
+    await loadQuestion();
+}
+async function nextQ(){
+    await fetch("/exam/goto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"next"})});
+    await loadQuestion();
+}
+async function prevQ(){
+    await fetch("/exam/goto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"prev"})});
+    await loadQuestion();
+}
+
+// Nộp bài
+async function submitExam(){
+    if(!confirm("Bạn có chắc muốn nộp bài?")) return;
+    submitted=true;
+    clearInterval(timerInterval);
+    const res=await fetch("/exam/submit",{method:"POST"});
+    const data=await res.json();
+    await loadQuestion();
+    alert(`Bạn đã trả lời đúng ${Math.round(data.correct/data.total*100)}% (${data.correct}/${data.total} câu).`);
+}
+
+// Cập nhật sidebar
+function updateSidebar(){
+    const sb=document.getElementById("sidebar");
+    const questionsCount = examData.num_questions || examData.questions.length;
+    sb.innerHTML='<h3>Danh sách câu hỏi</h3>';
+    for(let i=0;i<questionsCount;i++){
+        const btn=document.createElement("button");
+        btn.innerText=i+1;
+        btn.className="sidebar-btn";
+
+        const selected = examData.answers ? examData.answers[i] : null;
+        const answered = examData.answered_all ? examData.answered_all[i] : false;
+
+        if(answered && !submitted) btn.classList.add("answered");
+
+        if(submitted){
+    const correct = examData.questions[i].correct_index;
+    if(selected===null) btn.style.background="#f1c40f"; // chưa chọn → vàng
+    else if(selected===correct) btn.style.background="#3498db"; // đúng → xanh dương
+    else {
+        btn.style.background="#e74c3c"; // sai → đỏ
+        btn.style.border="2px solid #2ecc71"; // đáp án đúng
+    }
+}
+
+        btn.onclick=()=>gotoQ(i);
+        sb.appendChild(btn);
+    }
+}
+
+
+
+// Đồng hồ
+function startTimer(){
+    timerInterval=setInterval(async ()=>{
+        let m=Math.floor(timerSec/60);
+        let s=timerSec%60;
+        document.getElementById("timer").innerText=`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        timerSec--;
+        if(timerSec<0){
+            clearInterval(timerInterval);
+            await submitExam();
+        }
+    },1000);
+}
+
+// Thoát về trang chủ
+async function exitExam(){
+    if(!confirm("Bạn có chắc muốn thoát? Bài sẽ được nộp nếu chưa nộp.")) return;
+    await fetch("/exam/exit", {method:"POST"});
+    window.location.href = "/";
+}
+
+// Khởi chạy
+loadQuestion();
+startTimer();
+</script>
+</body>
+</html>
