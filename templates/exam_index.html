@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Phòng Thi</title>
+<style>
+    body {
+        margin:0;
+        padding:0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        height:100vh;
+    }
+    .exam-container {
+        background:white;
+        border-radius:15px;
+        padding:40px 60px;
+        box-shadow:0 10px 25px rgba(0,0,0,0.3);
+        width:400px;
+        text-align:center;
+    }
+    h2 {
+        margin-bottom:30px;
+        color:#333;
+        font-size:28px;
+    }
+    input[type="text"], input[type="password"] {
+        width:100%;
+        padding:12px 15px;
+        margin:10px 0 20px 0;
+        border:1px solid #ccc;
+        border-radius:8px;
+        font-size:16px;
+        transition:0.3s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+        border-color:#2575fc;
+        box-shadow:0 0 5px rgba(37,117,252,0.5);
+        outline:none;
+    }
+    button {
+        width:100%;
+        padding:15px;
+        font-size:18px;
+        font-weight:bold;
+        color:white;
+        background:linear-gradient(90deg, #6a11cb 0%, #2575fc 100%);
+        border:none;
+        border-radius:10px;
+        cursor:pointer;
+        transition:0.3s;
+    }
+    button:hover {
+        transform:translateY(-3px);
+        box-shadow:0 8px 15px rgba(0,0,0,0.3);
+    }
+    #error-msg {
+        color:red;
+        margin-bottom:15px;
+        min-height:20px;
+    }
+    @media(max-width:480px){
+        .exam-container {
+            width:90%;
+            padding:30px 20px;
+        }
+        h2 { font-size:24px; }
+        input, button { font-size:16px; padding:12px; }
+    }
+</style>
+</head>
+<body>
+
+<div class="exam-container">
+    <h2>Nhập thông tin phòng thi</h2>
+    <div id="error-msg"></div>
+    <input id="name" type="text" placeholder="Tên của bạn">
+    <input id="class" type="text" placeholder="Lớp">
+    <input id="password" type="password" placeholder="Mật khẩu phòng thi">
+    <button onclick="startExam()">Bắt đầu</button>
+</div>
+
+<script>
+async function startExam(){
+    const name = document.getElementById("name").value.trim();
+    const cls = document.getElementById("class").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const errorDiv = document.getElementById("error-msg");
+    errorDiv.innerText="";
+
+    if(!name || !cls || !password){
+        errorDiv.innerText="Vui lòng nhập đầy đủ Tên, Lớp và Mật khẩu!";
+        return;
+    }
+
+    try{
+        const res = await fetch("/exam/start", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({name:name,class:cls,password:password})
+        });
+        const data = await res.json();
+        if(data.ok && data.redirect){
+            window.location.href = data.redirect;
+        } else {
+            errorDiv.innerText = data.error || "Có lỗi xảy ra, thử lại!";
+        }
+    }catch(err){
+        console.error(err);
+        errorDiv.innerText="Lỗi kết nối server!";
+    }
+}
+
+// Bắt phím Enter
+document.querySelectorAll("#name,#class,#password").forEach(input=>{
+    input.addEventListener("keydown", function(e){
+        if(e.key === "Enter"){  // Nhấn Enter
+            startExam();
+        }
+    });
+});
+</script>
+
+</body>
+</html>
